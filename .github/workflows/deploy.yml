@@ -1,0 +1,55 @@
+name: Aliyun ECS Deploy  # 名字改了，体现是阿里云
+
+on:
+  push:
+    branches:
+      - main  # 确保你的默认分支是 main，如果是 master 请修改
+
+jobs:
+  deploy:
+    name: Deploy to Aliyun ECS
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 步骤 1: 设置 SSH Agent (保持你原本的风格，这是安全的做法)
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_KEY }}
+
+      # 步骤 2: 执行部署命令
+      - name: Deploy application to ECS
+        run: |
+          # 使用 SSH 连接到阿里云 ECS
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          
+          echo "🚀 Starting deployment on Aliyun ECS..."
+          
+          # 1. 进入项目目录 (请确认 ECS 上确实有这个文件夹，或者修改为绝对路径)
+          cd ~/chatbot_comp7940 || { echo "❌ Directory not found!"; exit 1; }
+          
+          # 2. 拉取最新代码
+          git pull origin main
+          
+          # 3. (可选) 如果依赖有变化，重新安装依赖
+          # source venv/bin/activate && pip install -r requirements.txt
+          
+          # 4. 停止旧进程 (修复了 nohup 的拼写错误)
+          # 注意：这里假设你在 venv 中运行，如果不是，直接写 python chatbot.py
+          pkill -f "python chatbot.py" || true
+          sleep 2 # 给一点时间让端口释放
+          
+          # 5. 启动新进程 (修复了 nohup 拼写，并确保路径正确)
+          # 方式 A: 如果使用了虚拟环境 (推荐)
+          nohup ~/chatbot_comp7940/venv/bin/python chatbot.py > app.log 2>&1 &
+          
+          # 方式 B: 如果没有虚拟环境，直接用系统 python (取消下面这行的注释并使用)
+          # nohup python chatbot.py > app.log 2>&1 &
+          
+          echo "✅ Deployment completed! Process started."
+          ps -ef | grep chatbot.py | grep -v grep
+          
+          EOF
